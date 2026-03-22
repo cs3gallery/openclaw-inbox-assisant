@@ -4,6 +4,8 @@ Sprint 1 provides the infrastructure foundation for a production-ready inbox org
 
 Sprint 2 adds email ingestion and normalization using the existing local OpenClaw Microsoft Graph connector. This service does not implement OAuth, Graph token management, or a standalone Graph SDK client. It integrates with the inspected OpenClaw connector API surface instead.
 
+Sprint 3 adds background email classification and action inference. The worker consumes `classify_email` jobs from `action_queue`, calls an OpenClaw-managed inference provider for structured classification, stores results in `email_classifications`, and optionally enqueues next-step suggestion jobs without executing them.
+
 ## Architecture Summary
 
 - `app`: Fastify HTTP service exposing `/livez`, `/readyz`, and `/health`.
@@ -13,6 +15,7 @@ Sprint 2 adds email ingestion and normalization using the existing local OpenCla
 - `redis`: Queue and job infrastructure foundation for future background processing.
 - `adminer`: Optional PostgreSQL admin UI for local development.
 - `mail ingestion`: App-side module that pulls mailbox messages from the OpenClaw connector, normalizes them, persists them idempotently, records sync checkpoints, and queues `classify_email` actions for downstream processing.
+- `classification worker`: Worker-side module that claims pending `classify_email` jobs, fetches the stored email context, performs structured classification, persists the result, and optionally enqueues `suggest_reply`, `extract_task`, `extract_document`, or `detect_emergency`.
 
 The startup path is intentionally explicit:
 
@@ -64,6 +67,41 @@ Normalized persistence includes:
 - sync checkpoints in `sync_state`
 - run tracking in `ingestion_runs`
 - downstream queue entries in `action_queue` and Redis stream publication
+
+## Classification Behavior
+
+- Queue source: durable `action_queue` rows with `action_type = classify_email`
+- Claim strategy: PostgreSQL `FOR UPDATE SKIP LOCKED`
+- Model interface: provider abstraction with an OpenClaw-backed default adapter that sends an OpenAI-compatible `chat/completions` payload to an OpenClaw-managed inference endpoint
+- Idempotency: if the same `email_id` and `CLASSIFICATION_VERSION` already exist in `email_classifications`, the worker marks the queue job completed without reclassifying
+- Retry behavior: failed jobs are rescheduled with exponential backoff until `CLASSIFICATION_MAX_ATTEMPTS`, then marked `failed`
+- Optional follow-up queue actions:
+  - `suggest_reply`
+  - `extract_task`
+  - `extract_document`
+  - `detect_emergency`
+
+Classification fields stored:
+
+- `category`
+- `urgency`
+- `emergency_score`
+- `needs_reply`
+- `task_likelihood`
+- `finance_doc_type`
+- `confidence`
+- `explanation_json`
+- `model_name`
+- `raw_response`
+
+OpenClaw-backed inference integration pattern:
+
+1. The worker builds the classification prompt locally from stored email data.
+2. `ClassificationInferenceProvider` abstracts model inference from the rest of the pipeline.
+3. `OpenClawInferenceProvider` sends the request to `OPENCLAW_INFERENCE_URL`.
+4. The request uses `x-openclaw-shared-secret` authentication and an OpenAI-compatible JSON-schema response contract.
+5. OpenClaw owns upstream vendor credentials and routing to OpenAI, Grok, or another compatible model provider.
+6. This inbox assistant only receives the structured result and validates it before persistence.
 
 ## Connector Capability Findings
 
@@ -173,6 +211,7 @@ npm run dev:worker
 - Applied migrations are tracked in `schema_migrations`.
 - The bootstrap path only creates Qdrant collections after dependency connectivity is confirmed.
 - Sprint 2 adds `sync_state`, `email_recipients`, and `ingestion_runs`, plus email schema refinements for source tracking and idempotent ingestion.
+- Sprint 3 adds classification fields and queue indexes for follow-up suggestion jobs.
 
 ## Health Endpoints
 
@@ -214,6 +253,19 @@ Example `/health` response:
 - `MAIL_INGESTION_FOLDERS` defaults to `Inbox`. The current connector only supports Inbox-style mailbox listing.
 - `MAIL_INGESTION_PAGE_SIZE`, `MAIL_INGESTION_POLL_WINDOW_MINUTES`, and `MAIL_INGESTION_FALLBACK_LOOKBACK_MINUTES` control the fallback ingestion window.
 - `MAIL_INGESTION_STATUS_LIMIT` controls the number of recent runs returned by status endpoints.
+- `CLASSIFICATION_PROVIDER` defaults to `openclaw` and controls which inference adapter the worker uses.
+- `CLASSIFICATION_MODEL` selects the model name passed through the inference provider.
+- `CLASSIFICATION_TIMEOUT_MS` controls the per-request timeout for model inference.
+- `OPENCLAW_INFERENCE_URL` is the OpenClaw-managed inference endpoint used for normal operation.
+- `OPENCLAW_INFERENCE_SHARED_SECRET` optionally overrides the header secret used for OpenClaw inference. If omitted, it falls back to `OPENCLAW_MSGRAPH_SHARED_SECRET`.
+- `OPENAI_API_KEY` is optional and only used if `CLASSIFICATION_PROVIDER=openai` for fallback/debug use.
+- `OPENAI_BASE_URL` is optional and only used with the direct OpenAI fallback.
+- `CLASSIFICATION_VERSION` controls idempotent classifier versioning.
+- `CLASSIFICATION_BODY_MAX_CHARS` limits how much email body text is sent to the model.
+- `CLASSIFICATION_POLL_INTERVAL_MS` controls worker idle polling frequency.
+- `CLASSIFICATION_MAX_ATTEMPTS`, `CLASSIFICATION_RETRY_BASE_DELAY_MS`, and `CLASSIFICATION_RETRY_MAX_DELAY_MS` control classification retry scheduling.
+- `CLASSIFICATION_TASK_THRESHOLD` controls when `extract_task` is enqueued.
+- `CLASSIFICATION_EMERGENCY_THRESHOLD` controls when `detect_emergency` is enqueued.
 
 ## Verification
 
@@ -268,6 +320,61 @@ docker compose exec -T postgres psql -U openclaw -d openclaw_inbox \
   -c "select action_type, email_id, payload from action_queue order by created_at desc limit 5;"
 ```
 
+## Manual Classification Test Steps
+
+1. Set the OpenClaw-managed inference configuration in `.env`:
+
+```bash
+CLASSIFICATION_PROVIDER=openclaw
+OPENCLAW_INFERENCE_URL=https://your-openclaw-host/v1/chat/completions
+OPENCLAW_INFERENCE_SHARED_SECRET=your-openclaw-shared-secret
+CLASSIFICATION_MODEL=gpt-4o-mini
+CLASSIFICATION_VERSION=sprint-3
+```
+
+2. Start or rebuild the stack:
+
+```bash
+docker compose up --build
+```
+
+3. Confirm the worker is healthy and processing:
+
+```bash
+curl http://localhost:3401/health
+docker compose logs --tail=100 worker
+```
+
+4. Ensure `classify_email` jobs exist. If not, trigger ingestion:
+
+```bash
+curl -X POST http://localhost:3400/ingestion/mail/run \
+  -H 'content-type: application/json' \
+  -d '{"requested_by":"classification-test"}'
+```
+
+5. Inspect persisted classification results:
+
+```bash
+docker compose exec -T postgres psql -U openclaw -d openclaw_inbox \
+  -c "select email_id, category, urgency, needs_reply, task_likelihood, finance_doc_type, confidence, classified_at from email_classifications order by classified_at desc limit 20;"
+```
+
+6. Inspect queue state after classification:
+
+```bash
+docker compose exec -T postgres psql -U openclaw -d openclaw_inbox \
+  -c "select action_type, status, attempts, email_id, scheduled_for, last_error from action_queue order by created_at desc limit 50;"
+```
+
+Expected result:
+
+- `classify_email` jobs move to `completed`
+- `email_classifications` rows are created
+- follow-up queue rows may appear for `suggest_reply`, `extract_task`, `extract_document`, or `detect_emergency`
+- rerunning the worker does not create another classification row for the same `email_id` and `CLASSIFICATION_VERSION`
+- no local `OPENAI_API_KEY` is required when `CLASSIFICATION_PROVIDER=openclaw`
+
 ## Troubleshooting
 
 - If `docker compose up --build` fails with a port collision, update `HOST_APP_PORT`, `HOST_WORKER_PORT`, or `ADMINER_PORT` in `.env`.
@@ -277,10 +384,14 @@ docker compose exec -T postgres psql -U openclaw -d openclaw_inbox \
 - If ingestion fails immediately, check `OPENCLAW_MSGRAPH_BASE_URL`, `OPENCLAW_MSGRAPH_SHARED_SECRET`, and the selected connection name.
 - If you configure folders other than `Inbox`, the current connector adapter will reject them because the inspected plugin does not expose folder-specific mail APIs yet.
 - If attachment metadata stays empty, that is expected when the connector payload does not include inline attachment objects.
+- If the worker exits on startup, check that `OPENCLAW_INFERENCE_URL` is set when `CLASSIFICATION_PROVIDER=openclaw`.
+- If classification jobs remain pending, inspect `docker compose logs worker` for model API errors or schema validation failures.
+- If jobs keep retrying, inspect `action_queue.last_error` and `scheduled_for` to confirm retry backoff is working as intended.
 
 ## Assumptions
 
 - Microsoft Graph ingestion is intentionally out of scope for Sprint 1.
-- Classification, task extraction, receipts handling, and approval workflows are not implemented yet.
+- Reply sending, task execution, receipts handling, document extraction, and approval workflows are not implemented yet.
 - A single embedding dimensionality is sufficient for `email_embeddings`, `reply_style_embeddings`, and `training_examples` at this stage.
-- Redis is provisioned and health-checked now, but job queues are deferred to a later sprint.
+- Redis is provisioned and health-checked now, but the classification worker currently uses PostgreSQL as the durable queue source of truth.
+- The exact OpenClaw inference endpoint contract was not present in the checked-in repos, so the adapter assumes an OpenAI-compatible `chat/completions` surface fronted by OpenClaw and authenticated with `x-openclaw-shared-secret`.

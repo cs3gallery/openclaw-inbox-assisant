@@ -60,7 +60,46 @@ const envSchema = z.object({
   MAIL_INGESTION_PAGE_SIZE: z.coerce.number().int().positive().default(100),
   MAIL_INGESTION_POLL_WINDOW_MINUTES: z.coerce.number().int().positive().default(1440),
   MAIL_INGESTION_FALLBACK_LOOKBACK_MINUTES: z.coerce.number().int().positive().default(240),
-  MAIL_INGESTION_STATUS_LIMIT: z.coerce.number().int().positive().default(20)
+  MAIL_INGESTION_STATUS_LIMIT: z.coerce.number().int().positive().default(20),
+  CLASSIFICATION_PROVIDER: z.enum(['openclaw', 'openai']).default('openclaw'),
+  CLASSIFICATION_MODEL: z.string().min(1).default('gpt-4o-mini'),
+  CLASSIFICATION_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  OPENCLAW_INFERENCE_URL: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  OPENCLAW_INFERENCE_SHARED_SECRET: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  OPENAI_API_KEY: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  OPENAI_BASE_URL: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  CLASSIFICATION_VERSION: z.string().min(1).default('sprint-3'),
+  CLASSIFICATION_BODY_MAX_CHARS: z.coerce.number().int().positive().default(12000),
+  CLASSIFICATION_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
+  CLASSIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  CLASSIFICATION_RETRY_BASE_DELAY_MS: z.coerce.number().int().positive().default(15000),
+  CLASSIFICATION_RETRY_MAX_DELAY_MS: z.coerce.number().int().positive().default(1800000),
+  CLASSIFICATION_TASK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.75),
+  CLASSIFICATION_EMERGENCY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.85)
 });
 
 const parsedEnv = envSchema.parse(process.env);
@@ -72,7 +111,10 @@ const databaseUrl =
 export const env = {
   ...parsedEnv,
   DATABASE_URL: databaseUrl,
-  DATABASE_SSL_ENABLED: parsedEnv.DATABASE_SSL_ENABLED ?? false
+  DATABASE_SSL_ENABLED: parsedEnv.DATABASE_SSL_ENABLED ?? false,
+  OPENCLAW_INFERENCE_SHARED_SECRET:
+    parsedEnv.OPENCLAW_INFERENCE_SHARED_SECRET ?? parsedEnv.OPENCLAW_MSGRAPH_SHARED_SECRET,
+  OPENAI_BASE_URL: parsedEnv.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'
 };
 
 export type AppEnv = typeof env;
