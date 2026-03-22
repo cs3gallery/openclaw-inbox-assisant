@@ -16,7 +16,8 @@ import { ClassificationOutputValidationError } from './outputHandling';
 import type { ClassificationInferenceProvider } from './provider';
 import { ClassificationRepository } from './repositories/classificationRepository';
 import { ClassificationEmailRepository } from './repositories/emailRepository';
-import type { ClassificationOutput } from './types';
+import type { ClassifierEmailContext, ClassificationOutput } from './types';
+import type { NotificationService } from '../notifications/service';
 
 type ProcessResult = {
   status: 'completed' | 'retry_scheduled' | 'failed';
@@ -40,7 +41,8 @@ export class EmailClassificationService {
     private readonly actionQueueRepository: ActionQueueRepository,
     private readonly emailRepository: ClassificationEmailRepository,
     private readonly classificationRepository: ClassificationRepository,
-    private readonly classifierProvider: ClassificationInferenceProvider
+    private readonly classifierProvider: ClassificationInferenceProvider,
+    private readonly notificationService?: NotificationService
   ) {}
 
   async processNextQueuedEmail(): Promise<ProcessResult | null> {
@@ -144,6 +146,12 @@ export class EmailClassificationService {
       modelName: classificationResult.modelName
     });
     const nextActions = await this.enqueueFollowUpActions(job.emailId, classificationId, normalizedOutput);
+    const outboundNotifications = await this.emitOutboundNotifications(
+      emailContext,
+      classificationId,
+      normalizedOutput,
+      nextActions
+    );
 
     await this.actionQueueRepository.completeAction(job.id, {
       status: 'completed',
@@ -157,6 +165,7 @@ export class EmailClassificationService {
       repaired: classificationResult.repairActions.length > 0,
       repair_action_count: classificationResult.repairActions.length,
       repair_actions: classificationResult.repairActions,
+      outbound_notification_ids: outboundNotifications.map((notification) => notification.id),
       next_actions: nextActions
     });
 
@@ -175,10 +184,35 @@ export class EmailClassificationService {
         provider: classificationResult.providerName,
         modelName: classificationResult.modelName,
         repairActions: classificationResult.repairActions,
+        outboundNotifications: outboundNotifications.map((notification) => ({
+          id: notification.id,
+          type: notification.notificationType,
+          status: notification.status
+        })),
         nextActions
       },
       'Email classified successfully'
     );
+  }
+
+  private async emitOutboundNotifications(
+    emailContext: ClassifierEmailContext,
+    classificationId: string,
+    output: ClassificationOutput,
+    nextActions: string[]
+  ) {
+    if (!this.notificationService) {
+      return [];
+    }
+
+    const urgentAlert = await this.notificationService.createUrgentAlertFromClassification({
+      emailContext,
+      classificationId,
+      output,
+      nextActions
+    });
+
+    return urgentAlert ? [urgentAlert] : [];
   }
 
   private normalizeOutput(output: ClassificationOutput): ClassificationOutput {

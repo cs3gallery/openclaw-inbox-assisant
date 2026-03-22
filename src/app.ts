@@ -11,6 +11,8 @@ import { MailIngestionRepository } from './modules/ingestion/repositories/mailIn
 import { SyncStateRepository } from './modules/ingestion/repositories/syncStateRepository';
 import { MailIngestionService } from './modules/ingestion/service';
 import { MailQueuePublisher } from './modules/ingestion/queuePublisher';
+import { NotificationRepository } from './modules/notifications/repositories/notificationRepository';
+import { NotificationService } from './modules/notifications/service';
 import { createAppServer } from './server/createServer';
 
 async function startApp(): Promise<void> {
@@ -23,8 +25,10 @@ async function startApp(): Promise<void> {
     new SyncStateRepository(),
     new MailQueuePublisher(new ActionQueueRepository())
   );
+  const notificationService = new NotificationService(new NotificationRepository());
   const server = await createAppServer({
-    mailIngestionService
+    mailIngestionService,
+    notificationService
   });
 
   registerShutdownHooks('app', async () => {

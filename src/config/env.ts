@@ -48,6 +48,13 @@ const envSchema = z.object({
       return trimmed ? trimmed : undefined;
     }),
   OPENCLAW_MSGRAPH_AUTH_MODE: z.enum(['delegated', 'auto']).default('delegated'),
+  OPENCLAW_BRIDGE_SHARED_SECRET: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
   MAIL_INGESTION_FOLDERS: z
     .string()
     .default('Inbox')

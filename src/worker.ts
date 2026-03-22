@@ -9,6 +9,8 @@ import { ClassificationRepository } from './modules/classification/repositories/
 import { ClassificationEmailRepository } from './modules/classification/repositories/emailRepository';
 import { EmailClassificationService } from './modules/classification/service';
 import { ActionQueueRepository } from './modules/ingestion/repositories/actionQueueRepository';
+import { NotificationRepository } from './modules/notifications/repositories/notificationRepository';
+import { NotificationService } from './modules/notifications/service';
 import { createWorkerServer } from './worker/createWorkerServer';
 import { startWorkerLoop } from './worker/workerLoop';
 
@@ -61,12 +63,14 @@ async function startWorker(): Promise<void> {
   }
 
   const server = await createWorkerServer();
+  const notificationService = new NotificationService(new NotificationRepository());
   const stopWorkerLoop = startWorkerLoop({
     emailClassificationService: new EmailClassificationService(
       new ActionQueueRepository(),
       new ClassificationEmailRepository(),
       new ClassificationRepository(),
-      createClassificationInferenceProvider()
+      createClassificationInferenceProvider(),
+      notificationService
     )
   });
 
