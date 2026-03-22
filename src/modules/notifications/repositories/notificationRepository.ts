@@ -617,9 +617,9 @@ export class NotificationRepository {
             metadata = metadata || jsonb_build_object(
               'last_user_action',
               jsonb_build_object(
-                'action_type', $2,
-                'actor_id', $3,
-                'source', $4,
+                'action_type', $2::text,
+                'actor_id', $3::text,
+                'source', $4::text,
                 'recorded_at', NOW()
               )
             )
