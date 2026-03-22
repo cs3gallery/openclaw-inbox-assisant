@@ -20,8 +20,7 @@
         "description": "Assistant identity used in agent prompt examples.",
         "default": "Nova"
       }
-    },
-    "required": ["baseUrl", "bearerToken"]
+    }
   },
   "uiHints": {
     "baseUrl": {
