@@ -525,16 +525,16 @@ export class NotificationRepository {
           UPDATE outbound_notifications
           SET
             status = CASE
-              WHEN $2 = 'failed' THEN 'delivery_failed'
+              WHEN $2::text = 'failed' THEN 'delivery_failed'
               ELSE 'delivered'
             END,
             delivered_at = CASE
-              WHEN $2 IN ('sent', 'delivered') THEN COALESCE(delivered_at, NOW())
+              WHEN $2::text IN ('sent', 'delivered') THEN COALESCE(delivered_at, NOW())
               ELSE delivered_at
             END,
             metadata = metadata || jsonb_build_object(
-              'last_delivery_status', $2,
-              'last_delivery_channel', $3
+              'last_delivery_status', $2::text,
+              'last_delivery_channel', $3::text
             )
           WHERE id = $1
           RETURNING *
