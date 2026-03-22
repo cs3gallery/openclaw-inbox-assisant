@@ -32,4 +32,10 @@ export const DEFAULT_URGENT_ALERT_ACTIONS = [
   'mark_not_important'
 ] as const;
 
+export const DEFAULT_DAILY_DIGEST_ACTIONS = [
+  'snooze',
+  'mark_not_important',
+  'create_todo'
+] as const;
+
 export const DEFAULT_APPROVAL_ACTIONS = ['approve', 'reject', 'snooze'] as const;

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   DEFAULT_APPROVAL_ACTIONS,
+  DEFAULT_DAILY_DIGEST_ACTIONS,
   DEFAULT_URGENT_ALERT_ACTIONS,
   INBOUND_USER_ACTION_STATUSES,
   INBOUND_USER_ACTION_TYPES,
@@ -112,6 +113,16 @@ export type DailyDigestPayload = z.infer<typeof dailyDigestPayloadSchema>;
 export type ApprovalRequestPayload = z.infer<typeof approvalRequestPayloadSchema>;
 
 export const defaultUrgentAlertActions = DEFAULT_URGENT_ALERT_ACTIONS.map((type) => ({
+  type,
+  label:
+    type === 'create_todo'
+      ? 'Create Todo'
+      : type === 'mark_not_important'
+        ? 'Not Important'
+        : 'Snooze'
+}));
+
+export const defaultDailyDigestActions = DEFAULT_DAILY_DIGEST_ACTIONS.map((type) => ({
   type,
   label:
     type === 'create_todo'

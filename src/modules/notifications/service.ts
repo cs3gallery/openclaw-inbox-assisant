@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import type { ClassifierEmailContext, ClassificationOutput } from '../classification/types';
 import {
   defaultApprovalActions,
+  defaultDailyDigestActions,
   defaultUrgentAlertActions,
   inboundUserActionTypeSchema,
   outboundNotificationTypeSchema,
@@ -218,7 +219,7 @@ export class NotificationService {
         'Highlights:',
         ...highlightLines
       ]),
-      actions: [],
+      actions: defaultDailyDigestActions,
       dedupeKey: `daily_digest:${periodStart}:${periodEnd}`,
       digestId,
       payload: {

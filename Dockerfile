@@ -19,4 +19,4 @@ COPY --chown=node:node --from=builder /app/node_modules ./node_modules
 COPY --chown=node:node --from=builder /app/dist ./dist
 COPY --chown=node:node migrations ./migrations
 USER node
-EXPOSE 3000 3001
+EXPOSE 3000 3001 3002

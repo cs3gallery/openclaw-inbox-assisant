@@ -11,6 +11,15 @@ const envSchema = z.object({
   APP_PORT: z.coerce.number().int().positive().default(3000),
   WORKER_HOST: z.string().min(1).default('0.0.0.0'),
   WORKER_PORT: z.coerce.number().int().positive().default(3001),
+  TELEGRAM_BRIDGE_HOST: z.string().min(1).default('0.0.0.0'),
+  TELEGRAM_BRIDGE_PORT: z.coerce.number().int().positive().default(3002),
+  TELEGRAM_BRIDGE_OUTBOUND_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
+  TELEGRAM_BRIDGE_UPDATES_POLL_TIMEOUT_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(50)
+    .default(8),
   WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
   POSTGRES_HOST: z.string().min(1).default('localhost'),
   POSTGRES_PORT: z.coerce.number().int().positive().default(5432),
@@ -55,6 +64,43 @@ const envSchema = z.object({
       const trimmed = value?.trim();
       return trimmed ? trimmed : undefined;
     }),
+  OPENCLAW_TOOL_API_BEARER_TOKEN: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  TELEGRAM_BRIDGE_INBOX_ASSISTANT_BASE_URL: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  TELEGRAM_BRIDGE_BOT_TOKEN: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  TELEGRAM_BRIDGE_CHAT_ID: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  TELEGRAM_BRIDGE_ALLOWED_CHAT_IDS: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value
+        ?.split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+    ),
   MAIL_INGESTION_FOLDERS: z
     .string()
     .default('Inbox')
@@ -127,7 +173,13 @@ export const env = {
   ...parsedEnv,
   DATABASE_URL: databaseUrl,
   DATABASE_SSL_ENABLED: parsedEnv.DATABASE_SSL_ENABLED ?? false,
-  OPENAI_BASE_URL: parsedEnv.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'
+  OPENAI_BASE_URL: parsedEnv.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
+  TELEGRAM_BRIDGE_ALLOWED_CHAT_IDS:
+    parsedEnv.TELEGRAM_BRIDGE_ALLOWED_CHAT_IDS?.length
+      ? parsedEnv.TELEGRAM_BRIDGE_ALLOWED_CHAT_IDS
+      : parsedEnv.TELEGRAM_BRIDGE_CHAT_ID
+        ? [parsedEnv.TELEGRAM_BRIDGE_CHAT_ID]
+        : []
 };
 
 export type AppEnv = typeof env;

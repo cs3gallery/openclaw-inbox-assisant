@@ -13,6 +13,8 @@ import { MailIngestionService } from './modules/ingestion/service';
 import { MailQueuePublisher } from './modules/ingestion/queuePublisher';
 import { NotificationRepository } from './modules/notifications/repositories/notificationRepository';
 import { NotificationService } from './modules/notifications/service';
+import { ToolRepository } from './modules/tools/repositories/toolRepository';
+import { ToolService } from './modules/tools/service';
 import { createAppServer } from './server/createServer';
 
 async function startApp(): Promise<void> {
@@ -26,9 +28,11 @@ async function startApp(): Promise<void> {
     new MailQueuePublisher(new ActionQueueRepository())
   );
   const notificationService = new NotificationService(new NotificationRepository());
+  const toolService = new ToolService(new ToolRepository());
   const server = await createAppServer({
     mailIngestionService,
-    notificationService
+    notificationService,
+    toolService
   });
 
   registerShutdownHooks('app', async () => {
