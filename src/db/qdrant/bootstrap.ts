@@ -9,20 +9,30 @@ const requiredCollections = [
 ] as const;
 
 export async function ensureQdrantCollections(): Promise<void> {
+  logger.info(
+    {
+      vectorSize: env.EMBEDDING_VECTOR_SIZE,
+      distance: env.QDRANT_COLLECTION_DISTANCE,
+      onDiskPayload: env.QDRANT_COLLECTION_ON_DISK_PAYLOAD
+    },
+    'Ensuring required Qdrant collections'
+  );
+
   const existingCollections = await qdrantClient.getCollections();
   const existingNames = new Set(existingCollections.collections.map((collection) => collection.name));
 
   for (const collectionName of requiredCollections) {
     if (existingNames.has(collectionName)) {
+      logger.debug({ collectionName }, 'Qdrant collection already exists');
       continue;
     }
 
     await qdrantClient.createCollection(collectionName, {
       vectors: {
         size: env.EMBEDDING_VECTOR_SIZE,
-        distance: 'Cosine'
+        distance: env.QDRANT_COLLECTION_DISTANCE
       },
-      on_disk_payload: true
+      on_disk_payload: env.QDRANT_COLLECTION_ON_DISK_PAYLOAD
     });
 
     logger.info({ collectionName }, 'Created Qdrant collection');
@@ -39,4 +49,3 @@ if (require.main === module) {
     process.exit(1);
   });
 }
-

@@ -11,6 +11,7 @@ export async function runMigrations(): Promise<void> {
   const advisoryLockClient = await postgresPool.connect();
 
   try {
+    logger.info({ advisoryLockId: ADVISORY_LOCK_ID }, 'Acquiring PostgreSQL migration lock');
     await advisoryLockClient.query('SELECT pg_advisory_lock($1)', [ADVISORY_LOCK_ID]);
     await advisoryLockClient.query(`
       CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
@@ -31,8 +32,17 @@ export async function runMigrations(): Promise<void> {
       .map((entry) => entry.name)
       .sort((left, right) => left.localeCompare(right));
 
+    logger.info(
+      {
+        totalMigrations: migrationFiles.length,
+        appliedMigrations: appliedMigrations.size
+      },
+      'Loaded PostgreSQL migrations'
+    );
+
     for (const migrationName of migrationFiles) {
       if (appliedMigrations.has(migrationName)) {
+        logger.debug({ migrationName }, 'Skipping already-applied PostgreSQL migration');
         continue;
       }
 
@@ -54,6 +64,7 @@ export async function runMigrations(): Promise<void> {
     }
   } finally {
     await advisoryLockClient.query('SELECT pg_advisory_unlock($1)', [ADVISORY_LOCK_ID]);
+    logger.info({ advisoryLockId: ADVISORY_LOCK_ID }, 'Released PostgreSQL migration lock');
     advisoryLockClient.release();
   }
 }

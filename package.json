@@ -5,6 +5,7 @@
   "description": "Production-ready inbox organizer and executive assistant service scaffold for OpenClaw.",
   "main": "dist/app.js",
   "scripts": {
+    "clean": "rm -rf dist",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "dev:app": "tsx watch src/app.ts",
@@ -12,13 +13,16 @@
     "start:app": "node dist/app.js",
     "start:worker": "node dist/worker.js",
     "migrate": "tsx src/db/postgres/migrator.ts",
-    "bootstrap:qdrant": "tsx src/db/qdrant/bootstrap.ts"
+    "bootstrap:qdrant": "tsx src/db/qdrant/bootstrap.ts",
+    "verify:health": "npm run build && node dist/scripts/verifyHealth.js",
+    "verify:infra": "docker compose exec -T app node dist/scripts/verifyInfra.js",
+    "verify:infra:local": "npm run build && node dist/scripts/verifyInfra.js"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@qdrant/js-client-rest": "^1.13.0",
+    "@qdrant/js-client-rest": "^1.17.0",
     "dotenv": "^16.4.7",
     "fastify": "^4.28.1",
     "ioredis": "^5.4.2",

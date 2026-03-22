@@ -8,7 +8,7 @@ import { createWorkerServer } from './worker/createWorkerServer';
 import { startWorkerLoop } from './worker/workerLoop';
 
 async function startWorker(): Promise<void> {
-  await bootstrapDependencies();
+  await bootstrapDependencies('worker');
 
   const server = await createWorkerServer();
   const stopWorkerLoop = startWorkerLoop();

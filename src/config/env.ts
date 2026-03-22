@@ -18,6 +18,7 @@ const envSchema = z.object({
   POSTGRES_USER: z.string().min(1).default('openclaw'),
   POSTGRES_PASSWORD: z.string().min(1).default('change-me'),
   POSTGRES_MAX_CONNECTIONS: z.coerce.number().int().positive().default(10),
+  POSTGRES_CONNECT_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
   DATABASE_URL: z.string().optional(),
   DATABASE_SSL_ENABLED: z
     .string()
@@ -27,7 +28,39 @@ const envSchema = z.object({
   REDIS_CONNECT_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
   QDRANT_URL: z.string().url(),
   QDRANT_API_KEY: z.string().optional(),
-  EMBEDDING_VECTOR_SIZE: z.coerce.number().int().positive().default(1536)
+  EMBEDDING_VECTOR_SIZE: z.coerce.number().int().positive().default(1536),
+  QDRANT_COLLECTION_DISTANCE: z.enum(['Cosine', 'Euclid', 'Dot', 'Manhattan']).default('Cosine'),
+  QDRANT_COLLECTION_ON_DISK_PAYLOAD: z
+    .string()
+    .optional()
+    .transform((value) => value !== 'false'),
+  STARTUP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(8),
+  STARTUP_INITIAL_BACKOFF_MS: z.coerce.number().int().positive().default(1000),
+  STARTUP_MAX_BACKOFF_MS: z.coerce.number().int().positive().default(10000),
+  SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
+  OPENCLAW_MSGRAPH_BASE_URL: z.string().url(),
+  OPENCLAW_MSGRAPH_SHARED_SECRET: z.string().min(1),
+  OPENCLAW_MSGRAPH_CONNECTION_NAME: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  OPENCLAW_MSGRAPH_AUTH_MODE: z.enum(['delegated', 'auto']).default('delegated'),
+  MAIL_INGESTION_FOLDERS: z
+    .string()
+    .default('Inbox')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+    ),
+  MAIL_INGESTION_PAGE_SIZE: z.coerce.number().int().positive().default(100),
+  MAIL_INGESTION_POLL_WINDOW_MINUTES: z.coerce.number().int().positive().default(1440),
+  MAIL_INGESTION_FALLBACK_LOOKBACK_MINUTES: z.coerce.number().int().positive().default(240),
+  MAIL_INGESTION_STATUS_LIMIT: z.coerce.number().int().positive().default(20)
 });
 
 const parsedEnv = envSchema.parse(process.env);
@@ -43,4 +76,3 @@ export const env = {
 };
 
 export type AppEnv = typeof env;
-

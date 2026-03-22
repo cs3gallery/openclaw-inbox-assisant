@@ -4,12 +4,28 @@ import { env } from './config/env';
 import { bootstrapDependencies } from './bootstrap/bootstrap';
 import { closePostgresPool } from './db/postgres/client';
 import { closeRedis } from './db/redis/client';
+import { OpenClawMsGraphProvider } from './modules/ingestion/providers/openClawMsGraphProvider';
+import { ActionQueueRepository } from './modules/ingestion/repositories/actionQueueRepository';
+import { IngestionRunsRepository } from './modules/ingestion/repositories/ingestionRunsRepository';
+import { MailIngestionRepository } from './modules/ingestion/repositories/mailIngestionRepository';
+import { SyncStateRepository } from './modules/ingestion/repositories/syncStateRepository';
+import { MailIngestionService } from './modules/ingestion/service';
+import { MailQueuePublisher } from './modules/ingestion/queuePublisher';
 import { createAppServer } from './server/createServer';
 
 async function startApp(): Promise<void> {
-  await bootstrapDependencies();
+  await bootstrapDependencies('app');
 
-  const server = await createAppServer();
+  const mailIngestionService = new MailIngestionService(
+    new OpenClawMsGraphProvider(),
+    new MailIngestionRepository(),
+    new IngestionRunsRepository(),
+    new SyncStateRepository(),
+    new MailQueuePublisher(new ActionQueueRepository())
+  );
+  const server = await createAppServer({
+    mailIngestionService
+  });
 
   registerShutdownHooks('app', async () => {
     await server.close();
@@ -31,4 +47,3 @@ startApp().catch(async (error) => {
   await closePostgresPool().catch(() => undefined);
   process.exit(1);
 });
-

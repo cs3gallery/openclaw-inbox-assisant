@@ -8,7 +8,7 @@ type DependencyStatus = {
   error?: string;
 };
 
-type HealthResponse = {
+type ReadinessHealthResponse = {
   service: string;
   status: 'ok' | 'degraded';
   timestamp: string;
@@ -18,6 +18,13 @@ type HealthResponse = {
     redis: DependencyStatus;
     qdrant: DependencyStatus;
   };
+};
+
+type HealthSummaryResponse = {
+  service: string;
+  status: 'ok' | 'degraded';
+  timestamp: string;
+  dependencies: Record<'postgres' | 'redis' | 'qdrant', 'ok' | 'error'>;
 };
 
 async function measureDependencyHealth(check: () => Promise<void>): Promise<DependencyStatus> {
@@ -38,7 +45,7 @@ async function measureDependencyHealth(check: () => Promise<void>): Promise<Depe
   }
 }
 
-export async function getReadinessHealth(service: string): Promise<HealthResponse> {
+export async function getReadinessHealth(service: string): Promise<ReadinessHealthResponse> {
   const [postgres, redis, qdrant] = await Promise.all([
     measureDependencyHealth(checkPostgresHealth),
     measureDependencyHealth(checkRedisHealth),
@@ -63,7 +70,20 @@ export async function getReadinessHealth(service: string): Promise<HealthRespons
   };
 }
 
-export function getLivenessHealth(service: string): Omit<HealthResponse, 'dependencies'> {
+export function getHealthSummary(service: string, readiness: ReadinessHealthResponse): HealthSummaryResponse {
+  return {
+    service,
+    status: readiness.status,
+    timestamp: readiness.timestamp,
+    dependencies: {
+      postgres: readiness.dependencies.postgres.status,
+      redis: readiness.dependencies.redis.status,
+      qdrant: readiness.dependencies.qdrant.status
+    }
+  };
+}
+
+export function getLivenessHealth(service: string): Omit<ReadinessHealthResponse, 'dependencies'> {
   return {
     service,
     status: 'ok',
@@ -71,4 +91,3 @@ export function getLivenessHealth(service: string): Omit<HealthResponse, 'depend
     uptimeSeconds: Math.floor(process.uptime())
   };
 }
-

@@ -7,10 +7,10 @@ export function startWorkerLoop(): () => void {
   const timer = setInterval(() => {
     logger.info({ service: 'worker' }, 'Worker heartbeat');
   }, env.WORKER_HEARTBEAT_INTERVAL_MS);
+  timer.unref();
 
   return () => {
     clearInterval(timer);
     logger.info('Worker loop stopped');
   };
 }
-
