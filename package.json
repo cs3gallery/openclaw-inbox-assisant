@@ -1,0 +1,35 @@
+{
+  "name": "openclaw-inbox-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-ready inbox organizer and executive assistant service scaffold for OpenClaw.",
+  "main": "dist/app.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "dev:app": "tsx watch src/app.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "start:app": "node dist/app.js",
+    "start:worker": "node dist/worker.js",
+    "migrate": "tsx src/db/postgres/migrator.ts",
+    "bootstrap:qdrant": "tsx src/db/qdrant/bootstrap.ts"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.13.0",
+    "dotenv": "^16.4.7",
+    "fastify": "^4.28.1",
+    "ioredis": "^5.4.2",
+    "pg": "^8.13.3",
+    "pino": "^9.6.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
