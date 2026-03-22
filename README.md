@@ -249,6 +249,7 @@ Example `/health` response:
 - `QDRANT_COLLECTION_DISTANCE` and `QDRANT_COLLECTION_ON_DISK_PAYLOAD` control initial collection creation.
 - `STARTUP_MAX_ATTEMPTS`, `STARTUP_INITIAL_BACKOFF_MS`, and `STARTUP_MAX_BACKOFF_MS` control dependency retry behavior.
 - `OPENCLAW_MSGRAPH_BASE_URL` is the existing local OpenClaw connector API base URL. In Docker on macOS, `http://host.docker.internal:3000` is a typical host-reachable default.
+- `docker-compose.yml` maps `host.docker.internal` to the Docker host for `app` and `worker`, so host-side OpenClaw services can be reached from Linux containers with `http://host.docker.internal:<port>`.
 - `OPENCLAW_MSGRAPH_SHARED_SECRET` must match the connector’s configured shared secret.
 - `OPENCLAW_MSGRAPH_CONNECTION_NAME` optionally pins the connector connection; otherwise the service tries the default/only active connection.
 - `OPENCLAW_MSGRAPH_AUTH_MODE` should stay `delegated` for mail ingestion with the current connector API.
@@ -391,6 +392,7 @@ Expected result:
 - If attachment metadata stays empty, that is expected when the connector payload does not include inline attachment objects.
 - If the worker exits on startup, check that `OPENCLAW_INFERENCE_URL` is set when `CLASSIFICATION_PROVIDER=openclaw`.
 - If the worker exits on startup with `OPENCLAW_INFERENCE_AUTH_MODE=bearer`, check that `OPENCLAW_INFERENCE_BEARER_TOKEN` is set and that the gateway endpoint is reachable from the worker container.
+- If classification logs show `ECONNREFUSED 127.0.0.1:<port>`, the worker is trying to call a host-side service through the container loopback address. Use `host.docker.internal` or another host-reachable address instead.
 - If classification jobs remain pending, inspect `docker compose logs worker` for model API errors or schema validation failures.
 - If jobs keep retrying, inspect `action_queue.last_error` and `scheduled_for` to confirm retry backoff is working as intended.
 

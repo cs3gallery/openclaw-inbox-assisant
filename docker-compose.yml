@@ -21,6 +21,8 @@ services:
         condition: service_started
     ports:
       - "${HOST_APP_PORT:-3400}:${APP_PORT:-3000}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test:
         [
@@ -70,6 +72,8 @@ services:
     restart: unless-stopped
     ports:
       - "${HOST_WORKER_PORT:-3401}:${WORKER_PORT:-3001}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   postgres:
     image: postgres:16-alpine

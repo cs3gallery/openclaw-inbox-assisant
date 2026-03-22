@@ -79,6 +79,7 @@ The Inbox Assistant stack expects:
 - Docker Engine and Docker Compose
 - one `.env` file in the project root
 - the OpenClaw endpoints to be reachable from inside the containers
+- `host.docker.internal` is mapped to the Docker host for `app` and `worker`, so host-local OpenClaw services can be reached from Linux containers
 
 Default published ports:
 
@@ -421,6 +422,11 @@ Inference endpoint returns 401 or 403:
 - verify `OPENCLAW_INFERENCE_BEARER_TOKEN`
 - verify the token is a valid OpenClaw gateway token
 - if you intentionally switched to `OPENCLAW_INFERENCE_AUTH_MODE=shared_secret`, verify `OPENCLAW_INFERENCE_SHARED_SECRET`
+
+Inference endpoint returns `ECONNREFUSED 127.0.0.1:18789` in worker logs:
+
+- `127.0.0.1` inside the container points to the container itself, not the OpenClaw host
+- set `OPENCLAW_INFERENCE_URL` to `http://host.docker.internal:18789/v1/chat/completions` or another host-reachable OpenClaw gateway address
 
 Classification jobs remain pending:
 
