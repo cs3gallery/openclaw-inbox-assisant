@@ -1,0 +1,38 @@
+{
+  "id": "openclaw-inbox-assistant-tools",
+  "name": "openclaw-inbox-assistant-tools",
+  "version": "0.1.0",
+  "description": "OpenClaw native plugin for urgent email lookup, pending email lookup, and todo creation via the inbox assistant.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "description": "Base URL for the inbox assistant app."
+      },
+      "bearerToken": {
+        "type": "string",
+        "description": "Bearer token used for inbox assistant tool API requests."
+      },
+      "assistantName": {
+        "type": "string",
+        "description": "Assistant identity used in agent prompt examples.",
+        "default": "Nova"
+      }
+    },
+    "required": ["baseUrl", "bearerToken"]
+  },
+  "uiHints": {
+    "baseUrl": {
+      "label": "Inbox Assistant Base URL"
+    },
+    "bearerToken": {
+      "label": "Inbox Assistant Bearer Token",
+      "sensitive": true
+    },
+    "assistantName": {
+      "label": "Assistant Name"
+    }
+  }
+}

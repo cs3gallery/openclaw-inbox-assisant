@@ -1,0 +1,25 @@
+{
+  "plugins": {
+    "allow": ["openclaw-inbox-assistant-tools"],
+    "load": {
+      "paths": ["./apps/openclaw-inbox-assistant-tools"]
+    },
+    "entries": {
+      "openclaw-inbox-assistant-tools": {
+        "enabled": true,
+        "config": {
+          "baseUrl": "http://localhost:3400",
+          "bearerToken": "REPLACE_ME",
+          "assistantName": "Nova"
+        }
+      }
+    }
+  },
+  "tools": {
+    "allow": [
+      "get_urgent_emails",
+      "get_pending_emails",
+      "create_todo"
+    ]
+  }
+}
