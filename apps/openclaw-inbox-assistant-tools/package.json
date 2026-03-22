@@ -5,6 +5,11 @@
   "type": "module",
   "description": "OpenClaw native plugin for inbox assistant tools.",
   "main": "dist/index.js",
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
   "files": [
     "dist",
     "openclaw.plugin.json",
