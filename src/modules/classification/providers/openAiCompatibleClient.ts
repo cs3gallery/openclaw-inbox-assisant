@@ -1,9 +1,6 @@
 import { classificationSystemPrompt, buildClassificationPrompt } from '../prompt';
-import {
-  classificationOutputSchema,
-  classificationResponseJsonSchema,
-  type ClassifierEmailContext
-} from '../types';
+import { parseAndValidateClassificationOutput } from '../outputHandling';
+import { classificationResponseJsonSchema, type ClassifierEmailContext } from '../types';
 
 type ChatCompletionResponse = {
   model?: string;
@@ -26,10 +23,11 @@ export type OpenAiCompatibleRequest = {
 export async function classifyWithOpenAiCompatibleApi(
   input: OpenAiCompatibleRequest
 ): Promise<{
-  output: ReturnType<typeof classificationOutputSchema.parse>;
+  output: ReturnType<typeof parseAndValidateClassificationOutput>['output'];
   rawResponse: Record<string, unknown>;
   modelName: string;
   providerName: string;
+  repairActions: ReturnType<typeof parseAndValidateClassificationOutput>['repairActions'];
 }> {
   const response = await fetch(input.endpointUrl, {
     method: 'POST',
@@ -77,10 +75,20 @@ export async function classifyWithOpenAiCompatibleApi(
     throw new Error(`${input.providerName} classification response did not include message content`);
   }
 
-  return {
-    output: classificationOutputSchema.parse(JSON.parse(content)),
+  const modelName = rawResponse.model ?? input.model;
+  const parsed = parseAndValidateClassificationOutput({
+    rawContent: content,
     rawResponse,
-    modelName: rawResponse.model ?? input.model,
-    providerName: input.providerName
+    providerName: input.providerName,
+    modelName,
+    context: input.context
+  });
+
+  return {
+    output: parsed.output,
+    rawResponse,
+    modelName,
+    providerName: input.providerName,
+    repairActions: parsed.repairActions
   };
 }

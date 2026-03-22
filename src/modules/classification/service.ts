@@ -12,6 +12,7 @@ import {
   EXTRACT_TASK_ACTION,
   SUGGEST_REPLY_ACTION
 } from './constants';
+import { ClassificationOutputValidationError } from './outputHandling';
 import type { ClassificationInferenceProvider } from './provider';
 import { ClassificationRepository } from './repositories/classificationRepository';
 import { ClassificationEmailRepository } from './repositories/emailRepository';
@@ -54,16 +55,26 @@ export class EmailClassificationService {
       return { status: 'completed' };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown classification error';
+      const validationDebug =
+        error instanceof ClassificationOutputValidationError ? error.debugSnapshot : undefined;
       const resultPayload = {
         action_type: job.actionType,
         email_id: job.emailId,
-        error: errorMessage
+        error: errorMessage,
+        ...(validationDebug ? { classification_debug: validationDebug } : {})
       };
 
       if (job.attempts >= env.CLASSIFICATION_MAX_ATTEMPTS) {
         await this.actionQueueRepository.failAction(job.id, errorMessage, resultPayload);
         logger.error(
-          { err: error, jobId: job.id, emailId: job.emailId, attempts: job.attempts },
+          {
+            err: error,
+            jobId: job.id,
+            emailId: job.emailId,
+            attempts: job.attempts,
+            repairActionCount: validationDebug?.repair_actions.length,
+            validationErrors: validationDebug?.validation_errors.map((issue) => issue.path)
+          },
           'Classification job failed permanently'
         );
 
@@ -78,7 +89,15 @@ export class EmailClassificationService {
       });
 
       logger.warn(
-        { err: error, jobId: job.id, emailId: job.emailId, attempts: job.attempts, retryAt },
+        {
+          err: error,
+          jobId: job.id,
+          emailId: job.emailId,
+          attempts: job.attempts,
+          retryAt,
+          repairActionCount: validationDebug?.repair_actions.length,
+          validationErrors: validationDebug?.validation_errors.map((issue) => issue.path)
+        },
         'Classification job failed and was rescheduled'
       );
 
@@ -135,6 +154,9 @@ export class EmailClassificationService {
       confidence: normalizedOutput.confidence,
       provider: classificationResult.providerName,
       model_name: classificationResult.modelName,
+      repaired: classificationResult.repairActions.length > 0,
+      repair_action_count: classificationResult.repairActions.length,
+      repair_actions: classificationResult.repairActions,
       next_actions: nextActions
     });
 
@@ -152,6 +174,7 @@ export class EmailClassificationService {
         confidence: normalizedOutput.confidence,
         provider: classificationResult.providerName,
         modelName: classificationResult.modelName,
+        repairActions: classificationResult.repairActions,
         nextActions
       },
       'Email classified successfully'
