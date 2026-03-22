@@ -19,7 +19,10 @@ async function startWorker(): Promise<void> {
     {
       classificationProvider: env.CLASSIFICATION_PROVIDER,
       classificationModel: env.CLASSIFICATION_MODEL,
+      openClawInferenceAuthMode: env.OPENCLAW_INFERENCE_AUTH_MODE,
       openClawInferenceUrlConfigured: Boolean(env.OPENCLAW_INFERENCE_URL),
+      openClawBearerTokenConfigured: Boolean(env.OPENCLAW_INFERENCE_BEARER_TOKEN),
+      openClawSharedSecretConfigured: Boolean(env.OPENCLAW_INFERENCE_SHARED_SECRET),
       openAiFallbackConfigured: Boolean(env.OPENAI_API_KEY)
     },
     'Classification worker configuration resolved'
@@ -28,6 +31,26 @@ async function startWorker(): Promise<void> {
   if (env.CLASSIFICATION_PROVIDER === 'openclaw' && !env.OPENCLAW_INFERENCE_URL) {
     throw new Error(
       'OPENCLAW_INFERENCE_URL is required to start the classification worker when CLASSIFICATION_PROVIDER=openclaw'
+    );
+  }
+
+  if (
+    env.CLASSIFICATION_PROVIDER === 'openclaw' &&
+    env.OPENCLAW_INFERENCE_AUTH_MODE === 'bearer' &&
+    !env.OPENCLAW_INFERENCE_BEARER_TOKEN
+  ) {
+    throw new Error(
+      'OPENCLAW_INFERENCE_BEARER_TOKEN is required when CLASSIFICATION_PROVIDER=openclaw and OPENCLAW_INFERENCE_AUTH_MODE=bearer'
+    );
+  }
+
+  if (
+    env.CLASSIFICATION_PROVIDER === 'openclaw' &&
+    env.OPENCLAW_INFERENCE_AUTH_MODE === 'shared_secret' &&
+    !env.OPENCLAW_INFERENCE_SHARED_SECRET
+  ) {
+    throw new Error(
+      'OPENCLAW_INFERENCE_SHARED_SECRET is required when CLASSIFICATION_PROVIDER=openclaw and OPENCLAW_INFERENCE_AUTH_MODE=shared_secret'
     );
   }
 

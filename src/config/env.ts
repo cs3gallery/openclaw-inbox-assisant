@@ -64,7 +64,15 @@ const envSchema = z.object({
   CLASSIFICATION_PROVIDER: z.enum(['openclaw', 'openai']).default('openclaw'),
   CLASSIFICATION_MODEL: z.string().min(1).default('gpt-4o-mini'),
   CLASSIFICATION_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  OPENCLAW_INFERENCE_AUTH_MODE: z.enum(['bearer', 'shared_secret']).default('bearer'),
   OPENCLAW_INFERENCE_URL: z
+    .string()
+    .optional()
+    .transform((value) => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    }),
+  OPENCLAW_INFERENCE_BEARER_TOKEN: z
     .string()
     .optional()
     .transform((value) => {
@@ -112,8 +120,6 @@ export const env = {
   ...parsedEnv,
   DATABASE_URL: databaseUrl,
   DATABASE_SSL_ENABLED: parsedEnv.DATABASE_SSL_ENABLED ?? false,
-  OPENCLAW_INFERENCE_SHARED_SECRET:
-    parsedEnv.OPENCLAW_INFERENCE_SHARED_SECRET ?? parsedEnv.OPENCLAW_MSGRAPH_SHARED_SECRET,
   OPENAI_BASE_URL: parsedEnv.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'
 };
 

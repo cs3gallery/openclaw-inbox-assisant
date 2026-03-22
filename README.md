@@ -100,8 +100,8 @@ OpenClaw-backed inference integration pattern:
 
 1. The worker builds the classification prompt locally from stored email data.
 2. `ClassificationInferenceProvider` abstracts model inference from the rest of the pipeline.
-3. `OpenClawInferenceProvider` sends the request to `OPENCLAW_INFERENCE_URL`.
-4. The request uses `x-openclaw-shared-secret` authentication and an OpenAI-compatible JSON-schema response contract.
+3. `OpenClawInferenceProvider` sends the request to the full `OPENCLAW_INFERENCE_URL` endpoint, for example `http(s)://<host>:18789/v1/chat/completions`.
+4. The default auth mode is `Authorization: Bearer <gateway token>` using `OPENCLAW_INFERENCE_BEARER_TOKEN`. `x-openclaw-shared-secret` remains available only as an explicit fallback mode.
 5. OpenClaw owns upstream vendor credentials and routing to OpenAI, Grok, or another compatible model provider.
 6. This inbox assistant only receives the structured result and validates it before persistence.
 
@@ -258,8 +258,10 @@ Example `/health` response:
 - `CLASSIFICATION_PROVIDER` defaults to `openclaw` and controls which inference adapter the worker uses.
 - `CLASSIFICATION_MODEL` selects the model name passed through the inference provider.
 - `CLASSIFICATION_TIMEOUT_MS` controls the per-request timeout for model inference.
-- `OPENCLAW_INFERENCE_URL` is the OpenClaw-managed inference endpoint used for normal operation.
-- `OPENCLAW_INFERENCE_SHARED_SECRET` optionally overrides the header secret used for OpenClaw inference. If omitted, it falls back to `OPENCLAW_MSGRAPH_SHARED_SECRET`.
+- `OPENCLAW_INFERENCE_AUTH_MODE` defaults to `bearer` for the confirmed OpenClaw gateway contract.
+- `OPENCLAW_INFERENCE_URL` must be the full OpenClaw-managed inference endpoint URL, not just the gateway base host.
+- `OPENCLAW_INFERENCE_BEARER_TOKEN` is required for the normal OpenClaw gateway path when `OPENCLAW_INFERENCE_AUTH_MODE=bearer`.
+- `OPENCLAW_INFERENCE_SHARED_SECRET` is only used when `OPENCLAW_INFERENCE_AUTH_MODE=shared_secret`.
 - `OPENAI_API_KEY` is optional and only used if `CLASSIFICATION_PROVIDER=openai` for fallback/debug use.
 - `OPENAI_BASE_URL` is optional and only used with the direct OpenAI fallback.
 - `CLASSIFICATION_VERSION` controls idempotent classifier versioning.
@@ -328,8 +330,9 @@ docker compose exec -T postgres psql -U openclaw -d openclaw_inbox \
 
 ```bash
 CLASSIFICATION_PROVIDER=openclaw
-OPENCLAW_INFERENCE_URL=https://your-openclaw-host/v1/chat/completions
-OPENCLAW_INFERENCE_SHARED_SECRET=your-openclaw-shared-secret
+OPENCLAW_INFERENCE_AUTH_MODE=bearer
+OPENCLAW_INFERENCE_URL=https://your-openclaw-host:18789/v1/chat/completions
+OPENCLAW_INFERENCE_BEARER_TOKEN=your-openclaw-gateway-token
 CLASSIFICATION_MODEL=gpt-4o-mini
 CLASSIFICATION_VERSION=sprint-3
 ```
@@ -387,6 +390,7 @@ Expected result:
 - If you configure folders other than `Inbox`, the current connector adapter will reject them because the inspected plugin does not expose folder-specific mail APIs yet.
 - If attachment metadata stays empty, that is expected when the connector payload does not include inline attachment objects.
 - If the worker exits on startup, check that `OPENCLAW_INFERENCE_URL` is set when `CLASSIFICATION_PROVIDER=openclaw`.
+- If the worker exits on startup with `OPENCLAW_INFERENCE_AUTH_MODE=bearer`, check that `OPENCLAW_INFERENCE_BEARER_TOKEN` is set and that the gateway endpoint is reachable from the worker container.
 - If classification jobs remain pending, inspect `docker compose logs worker` for model API errors or schema validation failures.
 - If jobs keep retrying, inspect `action_queue.last_error` and `scheduled_for` to confirm retry backoff is working as intended.
 
@@ -396,4 +400,4 @@ Expected result:
 - Reply sending, task execution, receipts handling, document extraction, and approval workflows are not implemented yet.
 - A single embedding dimensionality is sufficient for `email_embeddings`, `reply_style_embeddings`, and `training_examples` at this stage.
 - Redis is provisioned and health-checked now, but the classification worker currently uses PostgreSQL as the durable queue source of truth.
-- The exact OpenClaw inference endpoint contract was not present in the checked-in repos, so the adapter assumes an OpenAI-compatible `chat/completions` surface fronted by OpenClaw and authenticated with `x-openclaw-shared-secret`.
+- The confirmed OpenClaw inference contract is the gateway `POST /v1/chat/completions` endpoint on port `18789`, authenticated with a gateway Bearer token.

@@ -137,8 +137,10 @@ MAIL_INGESTION_STATUS_LIMIT=20
 CLASSIFICATION_PROVIDER=openclaw
 CLASSIFICATION_MODEL=gpt-4o-mini
 CLASSIFICATION_TIMEOUT_MS=30000
-OPENCLAW_INFERENCE_URL=https://<openclaw-inference-endpoint>
-OPENCLAW_INFERENCE_SHARED_SECRET=<shared-secret>
+OPENCLAW_INFERENCE_AUTH_MODE=bearer
+OPENCLAW_INFERENCE_URL=https://<openclaw-gateway-host>:18789/v1/chat/completions
+OPENCLAW_INFERENCE_BEARER_TOKEN=<gateway-token>
+OPENCLAW_INFERENCE_SHARED_SECRET=
 
 CLASSIFICATION_VERSION=sprint-3
 CLASSIFICATION_BODY_MAX_CHARS=12000
@@ -153,7 +155,10 @@ CLASSIFICATION_EMERGENCY_THRESHOLD=0.85
 Notes:
 
 - `OPENAI_API_KEY` is not required for the standard path.
-- `OPENCLAW_INFERENCE_SHARED_SECRET` may reuse `OPENCLAW_MSGRAPH_SHARED_SECRET` if OpenClaw uses the same secret for both endpoints.
+- `OPENCLAW_INFERENCE_AUTH_MODE` should remain `bearer` for the standard OpenClaw gateway path.
+- `OPENCLAW_INFERENCE_URL` must be the full endpoint URL, not just the gateway host.
+- `OPENCLAW_INFERENCE_BEARER_TOKEN` is required for the standard OpenClaw gateway path.
+- `OPENCLAW_INFERENCE_SHARED_SECRET` is only used if you explicitly set `OPENCLAW_INFERENCE_AUTH_MODE=shared_secret`.
 - `CLASSIFICATION_PROVIDER` should remain `openclaw` in normal deployments.
 
 ## OpenClaw Dependencies
@@ -168,8 +173,8 @@ The assistant assumes both are reachable over the network from Docker containers
 OpenClaw must provide:
 
 - a reachable base URL for mail search / mail connector requests
-- a reachable base URL for inference requests
-- a shared-secret authentication mechanism
+- a reachable full inference endpoint URL for `POST /v1/chat/completions`
+- gateway token authentication for the inference endpoint
 - an active Microsoft Graph connection in the connector
 - an inference route that accepts an OpenAI-compatible `chat/completions` payload and returns model output
 
@@ -203,7 +208,7 @@ Instead:
 
 1. The worker builds a classification prompt from stored email data.
 2. The worker sends a request to `OPENCLAW_INFERENCE_URL`.
-3. The request is authenticated with `x-openclaw-shared-secret`.
+3. The request is authenticated with `Authorization: Bearer <gateway token>` by default.
 4. OpenClaw routes that request to the upstream model provider.
 5. The worker validates the returned structured JSON and persists the result.
 
@@ -213,18 +218,19 @@ Expected request style:
 - strict JSON-schema response contract
 - model name passed through `CLASSIFICATION_MODEL`
 
-Important current gap:
+Confirmed contract:
 
-- The actual OpenClaw inference endpoint URL is not yet documented in this project.
-- The currently known OpenClaw host used for Microsoft Graph integration does not expose `chat/completions` routes.
-- Operators must identify and supply the real `OPENCLAW_INFERENCE_URL` before live classification can work.
+- OpenClaw gateway port: `18789`
+- Route: `POST /v1/chat/completions`
+- Auth: `Authorization: Bearer <gateway token>`
+- Response shape: OpenAI-compatible chat completion JSON
 
 ## Startup Order
 
 Recommended order:
 
 1. Ensure OpenClaw msgraph connector is reachable and has an active connection.
-2. Ensure OpenClaw inference endpoint is reachable and its route is known.
+2. Ensure the OpenClaw gateway `POST /v1/chat/completions` endpoint is reachable with a gateway token.
 3. Create `.env` for the Inbox Assistant with both OpenClaw URLs.
 4. Start the Inbox Assistant stack:
 
@@ -273,7 +279,7 @@ Success criteria:
 1. Confirm env is present:
 
 ```bash
-grep -E '^(OPENCLAW_MSGRAPH_BASE_URL|OPENCLAW_MSGRAPH_CONNECTION_NAME|CLASSIFICATION_PROVIDER|OPENCLAW_INFERENCE_URL)=' .env
+grep -E '^(OPENCLAW_MSGRAPH_BASE_URL|OPENCLAW_MSGRAPH_CONNECTION_NAME|CLASSIFICATION_PROVIDER|OPENCLAW_INFERENCE_AUTH_MODE|OPENCLAW_INFERENCE_URL|OPENCLAW_INFERENCE_BEARER_TOKEN)=' .env
 ```
 
 2. Start the stack:
@@ -310,6 +316,7 @@ Expected:
 
 - no restart loop
 - no missing `OPENCLAW_INFERENCE_URL` error
+- no missing `OPENCLAW_INFERENCE_BEARER_TOKEN` error when `OPENCLAW_INFERENCE_AUTH_MODE=bearer`
 - no missing `OPENAI_API_KEY` requirement when `CLASSIFICATION_PROVIDER=openclaw`
 
 ## Ingestion Validation
@@ -406,13 +413,14 @@ OPENCLAW_INFERENCE_URL is required to start the classification worker when CLASS
 
 Inference endpoint returns 404:
 
-- the configured URL is likely the msgraph connector, not the OpenClaw inference endpoint
-- identify the real OpenClaw inference route and set `OPENCLAW_INFERENCE_URL`
+- the configured URL is likely not the full gateway endpoint path
+- set `OPENCLAW_INFERENCE_URL` to the full route, for example `https://<host>:18789/v1/chat/completions`
 
 Inference endpoint returns 401 or 403:
 
-- verify `OPENCLAW_INFERENCE_SHARED_SECRET`
-- if OpenClaw uses one shared secret across services, reuse the connector secret
+- verify `OPENCLAW_INFERENCE_BEARER_TOKEN`
+- verify the token is a valid OpenClaw gateway token
+- if you intentionally switched to `OPENCLAW_INFERENCE_AUTH_MODE=shared_secret`, verify `OPENCLAW_INFERENCE_SHARED_SECRET`
 
 Classification jobs remain pending:
 
@@ -441,9 +449,7 @@ No classification rows are written:
 
 ## Known Limitations
 
-- The actual OpenClaw inference endpoint URL still needs to be identified and configured.
-- The known OpenClaw msgraph host does not currently expose inference routes.
-- Classification cannot complete until the inference endpoint is provided.
+- The gateway route is confirmed as `/v1/chat/completions`, but the Inbox Assistant must still be pointed at a host-reachable gateway URL from its own deployment environment.
 - The worker uses PostgreSQL as the durable queue source of truth.
 - Downstream processors for `suggest_reply`, `extract_task`, `extract_document`, and `detect_emergency` are not implemented yet.
 - The current ingestion path still depends on top-N message listing with a fallback timestamp window because the connector does not expose delta/cursor sync.
@@ -473,13 +479,14 @@ docker compose exec -T postgres psql -U openclaw -d openclaw_inbox \
 ## Operator Checklist
 
 1. Confirm the OpenClaw msgraph connector URL is known and reachable.
-2. Confirm the real OpenClaw inference endpoint URL is known and reachable.
+2. Confirm the OpenClaw gateway `POST /v1/chat/completions` endpoint is reachable.
 3. Set `CLASSIFICATION_PROVIDER=openclaw`.
-4. Set `OPENCLAW_INFERENCE_URL`.
-5. Set `OPENCLAW_INFERENCE_SHARED_SECRET` or confirm fallback to the connector secret.
-6. Start the Inbox Assistant stack with `docker compose up -d --build`.
-7. Confirm `app` and `worker` are both healthy.
-8. Trigger ingestion.
-9. Confirm `classify_email` jobs appear and then complete.
-10. Confirm rows appear in `email_classifications`.
-11. Confirm optional follow-up action rows are queued as expected.
+4. Set `OPENCLAW_INFERENCE_AUTH_MODE=bearer`.
+5. Set `OPENCLAW_INFERENCE_URL` to the full gateway endpoint URL.
+6. Set `OPENCLAW_INFERENCE_BEARER_TOKEN`.
+7. Start the Inbox Assistant stack with `docker compose up -d --build`.
+8. Confirm `app` and `worker` are both healthy.
+9. Trigger ingestion.
+10. Confirm `classify_email` jobs appear and then complete.
+11. Confirm rows appear in `email_classifications`.
+12. Confirm optional follow-up action rows are queued as expected.
