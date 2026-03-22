@@ -1,5 +1,7 @@
 # OpenClaw Inbox Assistant
 
+Deployment-oriented OpenClaw integration instructions are in [README.openclaw.md](/Users/josh/dev/openclaw-inbox-assisant/README.openclaw.md).
+
 Sprint 1 provides the infrastructure foundation for a production-ready inbox organizer and executive assistant service. It includes a TypeScript backend scaffold, Dockerized PostgreSQL/Qdrant/Redis dependencies, SQL migrations, Qdrant collection bootstrap, structured logging, and health checks for the app and worker.
 
 Sprint 2 adds email ingestion and normalization using the existing local OpenClaw Microsoft Graph connector. This service does not implement OAuth, Graph token management, or a standalone Graph SDK client. It integrates with the inspected OpenClaw connector API surface instead.
