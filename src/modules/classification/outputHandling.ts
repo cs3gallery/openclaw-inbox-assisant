@@ -220,16 +220,16 @@ function parseModelContentAsJson(rawContent: string): ParsedContentResult {
     }
   }
 
-  const extractedObject = extractJsonObject(trimmed);
+  const extractedObject = extractFirstBalancedJsonObject(trimmed);
 
   if (extractedObject) {
     const extractedParse = tryParseJson(extractedObject);
 
     if (extractedParse.ok) {
       parseActions.push({
-        type: 'extract_json_object',
+        type: 'extract_balanced_json_object',
         path: '$',
-        detail: 'Extracted the first JSON object from mixed model output.'
+        detail: 'Extracted the first balanced JSON object from mixed model output.'
       });
 
       return {
@@ -840,15 +840,58 @@ function stripCodeFence(value: string): string {
   return markdownFenceMatch ? markdownFenceMatch[1].trim() : value;
 }
 
-function extractJsonObject(value: string): string | null {
+function extractFirstBalancedJsonObject(value: string): string | null {
   const start = value.indexOf('{');
-  const end = value.lastIndexOf('}');
 
-  if (start === -1 || end === -1 || end <= start) {
+  if (start === -1) {
     return null;
   }
 
-  return value.slice(start, end + 1);
+  let depth = 0;
+  let inString = false;
+  let isEscaped = false;
+
+  for (let index = start; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        isEscaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = false;
+      }
+
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      depth -= 1;
+
+      if (depth === 0) {
+        return value.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
 }
 
 function tryParseJson(value: string): { ok: true; value: unknown } | { ok: false; error: string } {
